@@ -1,10 +1,32 @@
 import React, { useState, useMemo } from "react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid } from "recharts";
 
-const initialData = {
-  sla: { openTasks: 18, overdueTasks: 3 },
-  turnaround: { tasksCompleted: 26, totalDays: 52 },
-  capacity: { teamMembers: 5, hoursAvailable: 200, hoursAllocated: 168 },
-  bottleneck: { stage: "Client approval step", daysStuck: 4 },
+const initialTasks = [
+  { id: 1, name: "Vendor contract renewal", owner: "Ada", dueDays: -2, status: "Overdue" },
+  { id: 2, name: "Client onboarding — Zyra", owner: "Femi", dueDays: 3, status: "On track" },
+  { id: 3, name: "Monthly compliance check", owner: "Bola", dueDays: 1, status: "At risk" },
+  { id: 4, name: "Inventory reconciliation", owner: "Ada", dueDays: 5, status: "On track" },
+  { id: 5, name: "Customer refund — order 118", owner: "Chidi", dueDays: -1, status: "Overdue" },
+  { id: 6, name: "Staff shift schedule", owner: "Femi", dueDays: 2, status: "On track" },
+];
+
+const initialTeam = [
+  { id: 1, name: "Ada", hoursAvailable: 40, hoursAllocated: 38 },
+  { id: 2, name: "Femi", hoursAvailable: 40, hoursAllocated: 44 },
+  { id: 3, name: "Bola", hoursAvailable: 32, hoursAllocated: 20 },
+  { id: 4, name: "Chidi", hoursAvailable: 40, hoursAllocated: 30 },
+];
+
+const weeklyHealth = [
+  { week: "Wk 1", score: 74 },
+  { week: "Wk 2", score: 78 },
+  { week: "Wk 3", score: 71 },
+  { week: "Wk 4", score: 82 },
+  { week: "Wk 5", score: 85 },
+  { week: "This wk", score: 89 },
+];
+
+const initialMetrics = {
   rework: { totalTasks: 60, reworked: 6 },
   sop: { checked: 20, following: 17 },
   complaints: { interactions: 140, complaints: 5 },
@@ -14,49 +36,16 @@ function pct(n) {
   return `${Number(n || 0).toFixed(1)}%`;
 }
 
-function Field({ label, value, onChange, suffix }) {
-  return (
-    <label style={styles.field}>
-      <span style={styles.fieldLabel}>{label}</span>
-      <span style={styles.fieldInputWrap}>
-        <input
-          type="number"
-          value={value}
-          onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))}
-          style={styles.fieldInput}
-        />
-        {suffix && <span style={styles.fieldSuffix}>{suffix}</span>}
-      </span>
-    </label>
-  );
+function statusColor(status) {
+  if (status === "Overdue") return "#C9634B";
+  if (status === "At risk") return "#D9A441";
+  return "#4F9D69";
 }
 
-function TextField({ label, value, onChange }) {
-  return (
-    <label style={styles.field}>
-      <span style={styles.fieldLabel}>{label}</span>
-      <span style={styles.fieldInputWrap}>
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          style={styles.fieldInput}
-        />
-      </span>
-    </label>
-  );
-}
-
-function Section({ eyebrow, title, children }) {
-  return (
-    <section style={styles.section}>
-      <div style={styles.sectionHead}>
-        <span style={styles.eyebrow}>{eyebrow}</span>
-        <h2 style={styles.sectionTitle}>{title}</h2>
-      </div>
-      <div style={styles.sectionBody}>{children}</div>
-    </section>
-  );
+function utilColor(u) {
+  if (u > 100) return "#C9634B";
+  if (u > 85) return "#D9A441";
+  return "#4F9D69";
 }
 
 function healthColor(score) {
@@ -65,25 +54,31 @@ function healthColor(score) {
   return "#C9634B";
 }
 
-export default function OpsHealthDashboard() {
-  const [data, setData] = useState(initialData);
-  const [editing, setEditing] = useState(false);
+function StatCard({ label, value, color, note }) {
+  return (
+    <div style={styles.statCard}>
+      <div style={styles.statLabel}>{label}</div>
+      <div style={{ ...styles.statValue, color: color || "#EDEEF0" }}>{value}</div>
+      {note && <div style={styles.statNote}>{note}</div>}
+    </div>
+  );
+}
 
-  const slaRate = data.sla.openTasks
-    ? ((data.sla.openTasks - data.sla.overdueTasks) / data.sla.openTasks) * 100
-    : 100;
-  const avgTurnaround = data.turnaround.tasksCompleted
-    ? data.turnaround.totalDays / data.turnaround.tasksCompleted
+export default function OpsPulseDashboard() {
+  const [tasks, setTasks] = useState(initialTasks);
+  const [team, setTeam] = useState(initialTeam);
+  const [metrics, setMetrics] = useState(initialMetrics);
+
+  const overdueCount = tasks.filter((t) => t.status === "Overdue").length;
+  const atRiskCount = tasks.filter((t) => t.status === "At risk").length;
+  const slaRate = tasks.length ? ((tasks.length - overdueCount) / tasks.length) * 100 : 100;
+
+  const reworkRate = metrics.rework.totalTasks
+    ? (metrics.rework.reworked / metrics.rework.totalTasks) * 100
     : 0;
-  const utilization = data.capacity.hoursAvailable
-    ? (data.capacity.hoursAllocated / data.capacity.hoursAvailable) * 100
-    : 0;
-  const reworkRate = data.rework.totalTasks
-    ? (data.rework.reworked / data.rework.totalTasks) * 100
-    : 0;
-  const sopRate = data.sop.checked ? (data.sop.following / data.sop.checked) * 100 : 100;
-  const complaintRate = data.complaints.interactions
-    ? (data.complaints.complaints / data.complaints.interactions) * 100
+  const sopRate = metrics.sop.checked ? (metrics.sop.following / metrics.sop.checked) * 100 : 100;
+  const complaintRate = metrics.complaints.interactions
+    ? (metrics.complaints.complaints / metrics.complaints.interactions) * 100
     : 0;
 
   const healthScore = useMemo(() => {
@@ -91,7 +86,19 @@ export default function OpsHealthDashboard() {
     return parts.reduce((a, b) => a + b, 0) / parts.length;
   }, [slaRate, sopRate, reworkRate, complaintRate]);
 
-  const update = (group, key, v) => setData({ ...data, [group]: { ...data[group], [key]: v } });
+  const updateTask = (id, key, val) =>
+    setTasks(tasks.map((t) => (t.id === id ? { ...t, [key]: val } : t)));
+  const updateTeam = (id, key, val) =>
+    setTeam(team.map((m) => (m.id === id ? { ...m, [key]: val } : m)));
+  const updateMetric = (group, key, val) =>
+    setMetrics({ ...metrics, [group]: { ...metrics[group], [key]: val } });
+
+  const barData = [
+    { name: "SLA", value: Number(slaRate.toFixed(1)) },
+    { name: "SOP", value: Number(sopRate.toFixed(1)) },
+    { name: "Rework", value: Number(reworkRate.toFixed(1)) },
+    { name: "Complaints", value: Number(complaintRate.toFixed(1)) },
+  ];
 
   const today = new Date().toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
 
@@ -99,124 +106,175 @@ export default function OpsHealthDashboard() {
     <div style={styles.page}>
       <div style={styles.headerRow}>
         <div>
-          <div style={styles.brand}>OPS HEALTH LEDGER</div>
-          <div style={styles.brandSub}>Making the operation run smoothly</div>
+          <div style={styles.brand}>THE OPS PULSE</div>
+          <div style={styles.brandSub}>The vital signs of your operation · {today}</div>
         </div>
-        <button style={styles.toggle} onClick={() => setEditing((e) => !e)}>
-          {editing ? "View dashboard" : "Enter this week's numbers"}
-        </button>
-      </div>
-
-      <div style={{ ...styles.stamp, borderColor: healthColor(healthScore) }}>
-        <div style={styles.stampInner}>
-          <div style={styles.stampDate}>{today}</div>
-          <div style={{ ...styles.stampLabel, color: healthColor(healthScore) }}>Overall Ops Health Score</div>
-          <div style={styles.stampValue}>{healthScore.toFixed(0)}/100</div>
-          <div style={styles.stampDelta}>Blend of SLA, SOP adherence, rework, and complaint rate</div>
+        <div style={{ ...styles.scoreBadge, borderColor: healthColor(healthScore) }}>
+          <div style={styles.scoreLabel}>Ops Health</div>
+          <div style={{ ...styles.scoreValue, color: healthColor(healthScore) }}>{healthScore.toFixed(0)}</div>
         </div>
       </div>
 
-      <div style={styles.grid}>
-        <Section eyebrow="01 — SLA" title="Task / SLA Tracker">
-          {editing ? (
-            <>
-              <Field label="Open tasks" value={data.sla.openTasks} onChange={(v) => update("sla", "openTasks", v)} />
-              <Field label="Overdue tasks" value={data.sla.overdueTasks} onChange={(v) => update("sla", "overdueTasks", v)} />
-            </>
-          ) : (
-            <>
-              <div style={styles.bigNumber}>{pct(slaRate)}</div>
-              <div style={styles.smallNote}>{data.sla.overdueTasks} overdue of {data.sla.openTasks} open tasks</div>
-            </>
-          )}
-        </Section>
+      <div style={styles.statRow}>
+        <StatCard label="SLA met" value={pct(slaRate)} color={statusColor(overdueCount ? "Overdue" : "On track")} note={`${overdueCount} overdue, ${atRiskCount} at risk`} />
+        <StatCard label="SOP adherence" value={pct(sopRate)} note={`${metrics.sop.following}/${metrics.sop.checked} checks`} />
+        <StatCard label="Rework rate" value={pct(reworkRate)} color={reworkRate > 15 ? "#C9634B" : "#4F9D69"} note={`${metrics.rework.reworked}/${metrics.rework.totalTasks} tasks`} />
+        <StatCard label="Complaint rate" value={pct(complaintRate)} color={complaintRate > 5 ? "#C9634B" : "#4F9D69"} note={`${metrics.complaints.complaints}/${metrics.complaints.interactions}`} />
+      </div>
 
-        <Section eyebrow="02 — Speed" title="Turnaround Time">
-          {editing ? (
-            <>
-              <Field label="Tasks completed" value={data.turnaround.tasksCompleted} onChange={(v) => update("turnaround", "tasksCompleted", v)} />
-              <Field label="Total days spent" value={data.turnaround.totalDays} onChange={(v) => update("turnaround", "totalDays", v)} />
-            </>
-          ) : (
-            <>
-              <div style={styles.bigNumber}>{avgTurnaround.toFixed(1)} days</div>
-              <div style={styles.smallNote}>Average, across {data.turnaround.tasksCompleted} completed tasks</div>
-            </>
-          )}
-        </Section>
+      <div style={styles.chartGrid}>
+        <div style={styles.chartCard}>
+          <div style={styles.cardTitle}>Ops Health — last 6 weeks</div>
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={weeklyHealth}>
+              <CartesianGrid stroke="#262B34" vertical={false} />
+              <XAxis dataKey="week" stroke="#8B93A1" fontSize={11} />
+              <YAxis stroke="#8B93A1" fontSize={11} domain={[0, 100]} />
+              <Tooltip contentStyle={{ background: "#1B1F27", border: "1px solid #262B34" }} />
+              <Line type="monotone" dataKey="score" stroke="#D9A441" strokeWidth={2} dot={{ r: 3 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        <div style={styles.chartCard}>
+          <div style={styles.cardTitle}>This week's metrics</div>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={barData}>
+              <CartesianGrid stroke="#262B34" vertical={false} />
+              <XAxis dataKey="name" stroke="#8B93A1" fontSize={11} />
+              <YAxis stroke="#8B93A1" fontSize={11} />
+              <Tooltip contentStyle={{ background: "#1B1F27", border: "1px solid #262B34" }} />
+              <Bar dataKey="value" fill="#D9A441" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
 
-        <Section eyebrow="03 — Capacity" title="Team Capacity">
-          {editing ? (
-            <>
-              <Field label="Team members" value={data.capacity.teamMembers} onChange={(v) => update("capacity", "teamMembers", v)} />
-              <Field label="Hours available" value={data.capacity.hoursAvailable} onChange={(v) => update("capacity", "hoursAvailable", v)} />
-              <Field label="Hours allocated" value={data.capacity.hoursAllocated} onChange={(v) => update("capacity", "hoursAllocated", v)} />
-            </>
-          ) : (
-            <>
-              <div style={styles.bigNumber}>{pct(utilization)}</div>
-              <div style={styles.smallNote}>
-                {utilization > 100 ? "Team is overloaded" : utilization > 85 ? "Running near full capacity" : "Healthy headroom"} · {data.capacity.teamMembers} people
-              </div>
-            </>
-          )}
-        </Section>
+      <div style={styles.tableCard}>
+        <div style={styles.cardTitle}>Task Tracker <span style={styles.editHint}>— click any cell to edit</span></div>
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>Task</th>
+              <th style={styles.th}>Owner</th>
+              <th style={styles.th}>Due (days)</th>
+              <th style={styles.th}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tasks.map((t) => (
+              <tr key={t.id}>
+                <td style={styles.td}>
+                  <input style={styles.cellInput} value={t.name} onChange={(e) => updateTask(t.id, "name", e.target.value)} />
+                </td>
+                <td style={styles.td}>
+                  <input style={styles.cellInput} value={t.owner} onChange={(e) => updateTask(t.id, "owner", e.target.value)} />
+                </td>
+                <td style={styles.td}>
+                  <input
+                    style={{ ...styles.cellInput, width: 50 }}
+                    type="number"
+                    value={t.dueDays}
+                    onChange={(e) => updateTask(t.id, "dueDays", Number(e.target.value))}
+                  />
+                </td>
+                <td style={styles.td}>
+                  <select style={{ ...styles.cellInput, color: statusColor(t.status) }} value={t.status} onChange={(e) => updateTask(t.id, "status", e.target.value)}>
+                    <option>On track</option>
+                    <option>At risk</option>
+                    <option>Overdue</option>
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-        <Section eyebrow="04 — Bottlenecks" title="Bottleneck Tracker">
-          {editing ? (
-            <>
-              <TextField label="Stuck stage" value={data.bottleneck.stage} onChange={(v) => update("bottleneck", "stage", v)} />
-              <Field label="Days stuck" value={data.bottleneck.daysStuck} onChange={(v) => update("bottleneck", "daysStuck", v)} />
-            </>
-          ) : (
-            <>
-              <div style={styles.bigNumber}>{data.bottleneck.daysStuck}d</div>
-              <div style={styles.smallNote}>Longest hold-up: {data.bottleneck.stage}</div>
-            </>
-          )}
-        </Section>
+      <div style={styles.tableCard}>
+        <div style={styles.cardTitle}>Team Capacity</div>
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>Team member</th>
+              <th style={styles.th}>Hours available</th>
+              <th style={styles.th}>Hours allocated</th>
+              <th style={styles.th}>Utilization</th>
+            </tr>
+          </thead>
+          <tbody>
+            {team.map((m) => {
+              const util = m.hoursAvailable ? (m.hoursAllocated / m.hoursAvailable) * 100 : 0;
+              return (
+                <tr key={m.id}>
+                  <td style={styles.td}>
+                    <input style={styles.cellInput} value={m.name} onChange={(e) => updateTeam(m.id, "name", e.target.value)} />
+                  </td>
+                  <td style={styles.td}>
+                    <input
+                      style={{ ...styles.cellInput, width: 60 }}
+                      type="number"
+                      value={m.hoursAvailable}
+                      onChange={(e) => updateTeam(m.id, "hoursAvailable", Number(e.target.value))}
+                    />
+                  </td>
+                  <td style={styles.td}>
+                    <input
+                      style={{ ...styles.cellInput, width: 60 }}
+                      type="number"
+                      value={m.hoursAllocated}
+                      onChange={(e) => updateTeam(m.id, "hoursAllocated", Number(e.target.value))}
+                    />
+                  </td>
+                  <td style={styles.td}>
+                    <div style={styles.utilBarTrack}>
+                      <div style={{ ...styles.utilBarFill, width: `${Math.min(util, 100)}%`, background: utilColor(util) }} />
+                    </div>
+                    <span style={{ fontSize: 12, color: utilColor(util), marginLeft: 8 }}>{util.toFixed(0)}%</span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
-        <Section eyebrow="05 — Quality" title="Error / Rework Rate">
-          {editing ? (
-            <>
-              <Field label="Total tasks" value={data.rework.totalTasks} onChange={(v) => update("rework", "totalTasks", v)} />
-              <Field label="Tasks reworked" value={data.rework.reworked} onChange={(v) => update("rework", "reworked", v)} />
-            </>
-          ) : (
-            <>
-              <div style={styles.bigNumber}>{pct(reworkRate)}</div>
-              <div style={styles.smallNote}>{data.rework.reworked} of {data.rework.totalTasks} tasks needed rework</div>
-            </>
-          )}
-        </Section>
-
-        <Section eyebrow="06 — Process" title="SOP Adherence">
-          {editing ? (
-            <>
-              <Field label="Processes checked" value={data.sop.checked} onChange={(v) => update("sop", "checked", v)} />
-              <Field label="Following SOP" value={data.sop.following} onChange={(v) => update("sop", "following", v)} />
-            </>
-          ) : (
-            <>
-              <div style={styles.bigNumber}>{pct(sopRate)}</div>
-              <div style={styles.smallNote}>{data.sop.following} of {data.sop.checked} checks followed SOP</div>
-            </>
-          )}
-        </Section>
-
-        <Section eyebrow="07 — Customer Impact" title="Complaint / Escalation Rate">
-          {editing ? (
-            <>
-              <Field label="Total interactions" value={data.complaints.interactions} onChange={(v) => update("complaints", "interactions", v)} />
-              <Field label="Complaints raised" value={data.complaints.complaints} onChange={(v) => update("complaints", "complaints", v)} />
-            </>
-          ) : (
-            <>
-              <div style={styles.bigNumber}>{pct(complaintRate)}</div>
-              <div style={styles.smallNote}>{data.complaints.complaints} complaints of {data.complaints.interactions} interactions</div>
-            </>
-          )}
-        </Section>
+      <div style={styles.tableCard}>
+        <div style={styles.cardTitle}>Quality & Process Inputs</div>
+        <div style={styles.inputGrid}>
+          <div style={styles.inputGroup}>
+            <div style={styles.inputGroupLabel}>Error / Rework</div>
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Total tasks</span>
+              <input style={styles.fieldInput2} type="number" value={metrics.rework.totalTasks} onChange={(e) => updateMetric("rework", "totalTasks", Number(e.target.value))} />
+            </label>
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Reworked</span>
+              <input style={styles.fieldInput2} type="number" value={metrics.rework.reworked} onChange={(e) => updateMetric("rework", "reworked", Number(e.target.value))} />
+            </label>
+          </div>
+          <div style={styles.inputGroup}>
+            <div style={styles.inputGroupLabel}>SOP Adherence</div>
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Checked</span>
+              <input style={styles.fieldInput2} type="number" value={metrics.sop.checked} onChange={(e) => updateMetric("sop", "checked", Number(e.target.value))} />
+            </label>
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Following SOP</span>
+              <input style={styles.fieldInput2} type="number" value={metrics.sop.following} onChange={(e) => updateMetric("sop", "following", Number(e.target.value))} />
+            </label>
+          </div>
+          <div style={styles.inputGroup}>
+            <div style={styles.inputGroupLabel}>Complaints</div>
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Interactions</span>
+              <input style={styles.fieldInput2} type="number" value={metrics.complaints.interactions} onChange={(e) => updateMetric("complaints", "interactions", Number(e.target.value))} />
+            </label>
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>Complaints</span>
+              <input style={styles.fieldInput2} type="number" value={metrics.complaints.complaints} onChange={(e) => updateMetric("complaints", "complaints", Number(e.target.value))} />
+            </label>
+          </div>
+        </div>
       </div>
 
       <div style={styles.footer}>Manual entry · your numbers stay in this session</div>
@@ -236,117 +294,95 @@ const styles = {
   headerRow: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    maxWidth: 900,
-    margin: "0 auto 28px",
+    alignItems: "center",
+    maxWidth: 1000,
+    margin: "0 auto 24px",
     flexWrap: "wrap",
     gap: 12,
   },
-  brand: {
-    fontFamily: "Georgia, 'Times New Roman', serif",
-    fontSize: 22,
-    letterSpacing: 1.5,
-    color: "#EDEEF0",
-  },
+  brand: { fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 22, letterSpacing: 1.5 },
   brandSub: { color: "#8B93A1", fontSize: 13, marginTop: 4 },
-  toggle: {
-    background: "transparent",
-    border: "1px solid #3A404C",
-    color: "#D9A441",
-    borderRadius: 4,
-    padding: "8px 14px",
-    fontSize: 13,
-    cursor: "pointer",
-  },
-  stamp: {
-    maxWidth: 900,
-    margin: "0 auto 32px",
-    border: "1px solid #D9A441",
-    borderRadius: 2,
-    padding: 3,
-    transform: "rotate(-0.4deg)",
-  },
-  stampInner: {
-    background: "#171B22",
-    padding: "24px 28px",
+  scoreBadge: {
+    border: "1px solid",
+    borderRadius: 6,
+    padding: "8px 18px",
     textAlign: "center",
+    background: "#1B1F27",
   },
-  stampDate: {
-    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-    fontSize: 12,
-    color: "#8B93A1",
-    letterSpacing: 1,
-  },
-  stampLabel: {
-    fontFamily: "Georgia, 'Times New Roman', serif",
-    fontSize: 15,
-    marginTop: 10,
-    letterSpacing: 0.5,
-  },
-  stampValue: {
-    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-    fontSize: 42,
-    fontWeight: 600,
-    marginTop: 6,
-  },
-  stampDelta: { fontSize: 12, marginTop: 8, color: "#8B93A1" },
-  grid: {
-    maxWidth: 900,
-    margin: "0 auto",
+  scoreLabel: { fontSize: 11, color: "#8B93A1", letterSpacing: 0.5 },
+  scoreValue: { fontFamily: "ui-monospace, Menlo, monospace", fontSize: 26, fontWeight: 700 },
+  statRow: {
+    maxWidth: 1000,
+    margin: "0 auto 20px",
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+    gap: 12,
+  },
+  statCard: { background: "#1B1F27", border: "1px solid #262B34", borderRadius: 6, padding: 16 },
+  statLabel: { fontSize: 12, color: "#8B93A1" },
+  statValue: { fontFamily: "ui-monospace, Menlo, monospace", fontSize: 24, fontWeight: 600, marginTop: 4 },
+  statNote: { fontSize: 11, color: "#8B93A1", marginTop: 4 },
+  chartGrid: {
+    maxWidth: 1000,
+    margin: "0 auto 20px",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
     gap: 16,
   },
-  section: {
+  chartCard: { background: "#1B1F27", border: "1px solid #262B34", borderRadius: 6, padding: 16 },
+  cardTitle: { fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 15, marginBottom: 12 },
+  editHint: { fontFamily: "ui-sans-serif, sans-serif", fontSize: 11, color: "#565C68" },
+  tableCard: {
+    maxWidth: 1000,
+    margin: "0 auto 16px",
     background: "#1B1F27",
     border: "1px solid #262B34",
     borderRadius: 6,
-    padding: 20,
+    padding: 16,
+    overflowX: "auto",
   },
-  sectionHead: { marginBottom: 14 },
-  eyebrow: {
-    fontFamily: "ui-monospace, Menlo, monospace",
+  table: { width: "100%", borderCollapse: "collapse" },
+  th: {
+    textAlign: "left",
     fontSize: 11,
     color: "#8B93A1",
-    letterSpacing: 1,
-  },
-  sectionTitle: {
-    fontFamily: "Georgia, 'Times New Roman', serif",
-    fontSize: 17,
-    margin: "4px 0 0",
     fontWeight: 400,
+    padding: "6px 8px",
+    borderBottom: "1px solid #262B34",
   },
-  sectionBody: { display: "flex", flexDirection: "column", gap: 10 },
-  bigNumber: {
-    fontFamily: "ui-monospace, Menlo, monospace",
-    fontSize: 30,
-    fontWeight: 600,
-  },
-  smallNote: { fontSize: 12, color: "#8B93A1" },
-  field: { display: "flex", flexDirection: "column", gap: 4 },
-  fieldLabel: { fontSize: 12, color: "#8B93A1" },
-  fieldInputWrap: {
-    display: "flex",
-    alignItems: "center",
-    background: "#12151A",
-    border: "1px solid #262B34",
-    borderRadius: 4,
-    padding: "6px 10px",
-  },
-  fieldSuffix: { color: "#8B93A1", marginLeft: 6, fontSize: 12 },
-  fieldInput: {
+  td: { padding: "6px 8px", borderBottom: "1px solid #1E232B" },
+  cellInput: {
     background: "transparent",
     border: "none",
     outline: "none",
     color: "#EDEEF0",
-    fontSize: 14,
+    fontSize: 13,
     width: "100%",
+    fontFamily: "ui-sans-serif, sans-serif",
+  },
+  utilBarTrack: {
+    display: "inline-block",
+    width: 80,
+    height: 6,
+    background: "#262B34",
+    borderRadius: 3,
+    overflow: "hidden",
+    verticalAlign: "middle",
+  },
+  utilBarFill: { height: "100%" },
+  inputGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 },
+  inputGroup: { display: "flex", flexDirection: "column", gap: 8 },
+  inputGroupLabel: { fontSize: 12, color: "#D9A441", marginBottom: 4 },
+  field: { display: "flex", flexDirection: "column", gap: 2 },
+  fieldLabel: { fontSize: 11, color: "#8B93A1" },
+  fieldInput2: {
+    background: "#12151A",
+    border: "1px solid #262B34",
+    borderRadius: 4,
+    padding: "6px 8px",
+    color: "#EDEEF0",
+    fontSize: 13,
     fontFamily: "ui-monospace, Menlo, monospace",
   },
-  footer: {
-    textAlign: "center",
-    marginTop: 32,
-    fontSize: 12,
-    color: "#565C68",
-  },
+  footer: { textAlign: "center", marginTop: 24, fontSize: 12, color: "#565C68" },
 };
