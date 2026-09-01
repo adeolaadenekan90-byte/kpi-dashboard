@@ -1,33 +1,45 @@
 import React, { useState, useMemo } from "react";
 
 const initialData = {
-  revenue: [
-    { label: "This week", value: 420000 },
-    { label: "Last week", value: 365000 },
-  ],
-  orders: { count: 34, customers: 21, repeatCustomers: 9 },
-  costs: { cogs: 140000, opex: 65000 },
-  channels: [
-    { name: "Instagram", revenue: 210000 },
-    { name: "Referral", revenue: 120000 },
-    { name: "WhatsApp", revenue: 90000 },
-  ],
+  sla: { openTasks: 18, overdueTasks: 3 },
+  turnaround: { tasksCompleted: 26, totalDays: 52 },
+  capacity: { teamMembers: 5, hoursAvailable: 200, hoursAllocated: 168 },
+  bottleneck: { stage: "Client approval step", daysStuck: 4 },
+  rework: { totalTasks: 60, reworked: 6 },
+  sop: { checked: 20, following: 17 },
+  complaints: { interactions: 140, complaints: 5 },
 };
 
-function formatNaira(n) {
-  return "₦" + Number(n || 0).toLocaleString("en-NG");
+function pct(n) {
+  return `${Number(n || 0).toFixed(1)}%`;
 }
 
-function Field({ label, value, onChange, prefix }) {
+function Field({ label, value, onChange, suffix }) {
   return (
     <label style={styles.field}>
       <span style={styles.fieldLabel}>{label}</span>
       <span style={styles.fieldInputWrap}>
-        {prefix && <span style={styles.fieldPrefix}>{prefix}</span>}
         <input
           type="number"
           value={value}
           onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))}
+          style={styles.fieldInput}
+        />
+        {suffix && <span style={styles.fieldSuffix}>{suffix}</span>}
+      </span>
+    </label>
+  );
+}
+
+function TextField({ label, value, onChange }) {
+  return (
+    <label style={styles.field}>
+      <span style={styles.fieldLabel}>{label}</span>
+      <span style={styles.fieldInputWrap}>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
           style={styles.fieldInput}
         />
       </span>
@@ -35,7 +47,7 @@ function Field({ label, value, onChange, prefix }) {
   );
 }
 
-function Section({ eyebrow, title, children, footer }) {
+function Section({ eyebrow, title, children }) {
   return (
     <section style={styles.section}>
       <div style={styles.sectionHead}>
@@ -43,44 +55,43 @@ function Section({ eyebrow, title, children, footer }) {
         <h2 style={styles.sectionTitle}>{title}</h2>
       </div>
       <div style={styles.sectionBody}>{children}</div>
-      {footer && <div style={styles.sectionFooter}>{footer}</div>}
     </section>
   );
 }
 
-export default function KPIDashboard() {
+function healthColor(score) {
+  if (score >= 80) return "#4F9D69";
+  if (score >= 60) return "#D9A441";
+  return "#C9634B";
+}
+
+export default function OpsHealthDashboard() {
   const [data, setData] = useState(initialData);
   const [editing, setEditing] = useState(false);
 
-  const totalRevenue = data.revenue[0].value;
-  const priorRevenue = data.revenue[1].value;
-  const revenueDelta = priorRevenue ? ((totalRevenue - priorRevenue) / priorRevenue) * 100 : 0;
+  const slaRate = data.sla.openTasks
+    ? ((data.sla.openTasks - data.sla.overdueTasks) / data.sla.openTasks) * 100
+    : 100;
+  const avgTurnaround = data.turnaround.tasksCompleted
+    ? data.turnaround.totalDays / data.turnaround.tasksCompleted
+    : 0;
+  const utilization = data.capacity.hoursAvailable
+    ? (data.capacity.hoursAllocated / data.capacity.hoursAvailable) * 100
+    : 0;
+  const reworkRate = data.rework.totalTasks
+    ? (data.rework.reworked / data.rework.totalTasks) * 100
+    : 0;
+  const sopRate = data.sop.checked ? (data.sop.following / data.sop.checked) * 100 : 100;
+  const complaintRate = data.complaints.interactions
+    ? (data.complaints.complaints / data.complaints.interactions) * 100
+    : 0;
 
-  const grossProfit = totalRevenue - data.costs.cogs;
-  const netProfit = grossProfit - data.costs.opex;
-  const margin = totalRevenue ? (netProfit / totalRevenue) * 100 : 0;
+  const healthScore = useMemo(() => {
+    const parts = [slaRate, sopRate, 100 - reworkRate, 100 - complaintRate];
+    return parts.reduce((a, b) => a + b, 0) / parts.length;
+  }, [slaRate, sopRate, reworkRate, complaintRate]);
 
-  const avgOrderValue = data.orders.count ? totalRevenue / data.orders.count : 0;
-  const repeatRate = data.orders.customers ? (data.orders.repeatCustomers / data.orders.customers) * 100 : 0;
-
-  const topChannel = useMemo(
-    () => [...data.channels].sort((a, b) => b.revenue - a.revenue)[0],
-    [data.channels]
-  );
-  const channelTotal = data.channels.reduce((s, c) => s + c.revenue, 0);
-
-  const updateRevenue = (i, v) => {
-    const next = [...data.revenue];
-    next[i] = { ...next[i], value: v };
-    setData({ ...data, revenue: next });
-  };
-  const updateOrders = (key, v) => setData({ ...data, orders: { ...data.orders, [key]: v } });
-  const updateCosts = (key, v) => setData({ ...data, costs: { ...data.costs, [key]: v } });
-  const updateChannel = (i, v) => {
-    const next = [...data.channels];
-    next[i] = { ...next[i], revenue: v };
-    setData({ ...data, channels: next });
-  };
+  const update = (group, key, v) => setData({ ...data, [group]: { ...data[group], [key]: v } });
 
   const today = new Date().toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
 
@@ -88,94 +99,121 @@ export default function KPIDashboard() {
     <div style={styles.page}>
       <div style={styles.headerRow}>
         <div>
-          <div style={styles.brand}>OPERATOR'S LEDGER</div>
-          <div style={styles.brandSub}>Turning operations into revenue</div>
+          <div style={styles.brand}>OPS HEALTH LEDGER</div>
+          <div style={styles.brandSub}>Making the operation run smoothly</div>
         </div>
         <button style={styles.toggle} onClick={() => setEditing((e) => !e)}>
           {editing ? "View dashboard" : "Enter this week's numbers"}
         </button>
       </div>
 
-      <div style={styles.stamp}>
+      <div style={{ ...styles.stamp, borderColor: healthColor(healthScore) }}>
         <div style={styles.stampInner}>
           <div style={styles.stampDate}>{today}</div>
-          <div style={styles.stampLabel}>Net profit, this week</div>
-          <div style={styles.stampValue}>{formatNaira(netProfit)}</div>
-          <div style={{ ...styles.stampDelta, color: revenueDelta >= 0 ? "#4F9D69" : "#C9634B" }}>
-            {revenueDelta >= 0 ? "▲" : "▼"} {Math.abs(revenueDelta).toFixed(1)}% revenue vs last week
-          </div>
+          <div style={{ ...styles.stampLabel, color: healthColor(healthScore) }}>Overall Ops Health Score</div>
+          <div style={styles.stampValue}>{healthScore.toFixed(0)}/100</div>
+          <div style={styles.stampDelta}>Blend of SLA, SOP adherence, rework, and complaint rate</div>
         </div>
       </div>
 
       <div style={styles.grid}>
-        <Section eyebrow="01 — Revenue" title="Revenue Snapshot">
+        <Section eyebrow="01 — SLA" title="Task / SLA Tracker">
           {editing ? (
             <>
-              <Field label="This week" prefix="₦" value={data.revenue[0].value} onChange={(v) => updateRevenue(0, v)} />
-              <Field label="Last week" prefix="₦" value={data.revenue[1].value} onChange={(v) => updateRevenue(1, v)} />
+              <Field label="Open tasks" value={data.sla.openTasks} onChange={(v) => update("sla", "openTasks", v)} />
+              <Field label="Overdue tasks" value={data.sla.overdueTasks} onChange={(v) => update("sla", "overdueTasks", v)} />
             </>
           ) : (
             <>
-              <div style={styles.bigNumber}>{formatNaira(totalRevenue)}</div>
-              <div style={styles.smallNote}>vs {formatNaira(priorRevenue)} last week</div>
+              <div style={styles.bigNumber}>{pct(slaRate)}</div>
+              <div style={styles.smallNote}>{data.sla.overdueTasks} overdue of {data.sla.openTasks} open tasks</div>
             </>
           )}
         </Section>
 
-        <Section eyebrow="02 — Orders & Customers" title="Orders & Customers">
+        <Section eyebrow="02 — Speed" title="Turnaround Time">
           {editing ? (
             <>
-              <Field label="Orders" value={data.orders.count} onChange={(v) => updateOrders("count", v)} />
-              <Field label="Customers" value={data.orders.customers} onChange={(v) => updateOrders("customers", v)} />
-              <Field label="Repeat customers" value={data.orders.repeatCustomers} onChange={(v) => updateOrders("repeatCustomers", v)} />
+              <Field label="Tasks completed" value={data.turnaround.tasksCompleted} onChange={(v) => update("turnaround", "tasksCompleted", v)} />
+              <Field label="Total days spent" value={data.turnaround.totalDays} onChange={(v) => update("turnaround", "totalDays", v)} />
             </>
           ) : (
             <>
-              <div style={styles.statRow}>
-                <div><div style={styles.statValue}>{data.orders.count}</div><div style={styles.statLabel}>Orders</div></div>
-                <div><div style={styles.statValue}>{formatNaira(avgOrderValue)}</div><div style={styles.statLabel}>Avg order value</div></div>
-                <div><div style={styles.statValue}>{repeatRate.toFixed(0)}%</div><div style={styles.statLabel}>Repeat rate</div></div>
+              <div style={styles.bigNumber}>{avgTurnaround.toFixed(1)} days</div>
+              <div style={styles.smallNote}>Average, across {data.turnaround.tasksCompleted} completed tasks</div>
+            </>
+          )}
+        </Section>
+
+        <Section eyebrow="03 — Capacity" title="Team Capacity">
+          {editing ? (
+            <>
+              <Field label="Team members" value={data.capacity.teamMembers} onChange={(v) => update("capacity", "teamMembers", v)} />
+              <Field label="Hours available" value={data.capacity.hoursAvailable} onChange={(v) => update("capacity", "hoursAvailable", v)} />
+              <Field label="Hours allocated" value={data.capacity.hoursAllocated} onChange={(v) => update("capacity", "hoursAllocated", v)} />
+            </>
+          ) : (
+            <>
+              <div style={styles.bigNumber}>{pct(utilization)}</div>
+              <div style={styles.smallNote}>
+                {utilization > 100 ? "Team is overloaded" : utilization > 85 ? "Running near full capacity" : "Healthy headroom"} · {data.capacity.teamMembers} people
               </div>
             </>
           )}
         </Section>
 
-        <Section eyebrow="03 — Profit Margin" title="Profit Margin">
+        <Section eyebrow="04 — Bottlenecks" title="Bottleneck Tracker">
           {editing ? (
             <>
-              <Field label="Cost of goods" prefix="₦" value={data.costs.cogs} onChange={(v) => updateCosts("cogs", v)} />
-              <Field label="Operating costs" prefix="₦" value={data.costs.opex} onChange={(v) => updateCosts("opex", v)} />
+              <TextField label="Stuck stage" value={data.bottleneck.stage} onChange={(v) => update("bottleneck", "stage", v)} />
+              <Field label="Days stuck" value={data.bottleneck.daysStuck} onChange={(v) => update("bottleneck", "daysStuck", v)} />
             </>
           ) : (
             <>
-              <div style={styles.bigNumber}>{margin.toFixed(1)}%</div>
-              <div style={styles.smallNote}>Gross {formatNaira(grossProfit)} → Net {formatNaira(netProfit)}</div>
+              <div style={styles.bigNumber}>{data.bottleneck.daysStuck}d</div>
+              <div style={styles.smallNote}>Longest hold-up: {data.bottleneck.stage}</div>
             </>
           )}
         </Section>
 
-        <Section eyebrow="04 — Channel Performance" title="Channel Performance">
+        <Section eyebrow="05 — Quality" title="Error / Rework Rate">
           {editing ? (
-            data.channels.map((c, i) => (
-              <Field key={c.name} label={c.name} prefix="₦" value={c.revenue} onChange={(v) => updateChannel(i, v)} />
-            ))
+            <>
+              <Field label="Total tasks" value={data.rework.totalTasks} onChange={(v) => update("rework", "totalTasks", v)} />
+              <Field label="Tasks reworked" value={data.rework.reworked} onChange={(v) => update("rework", "reworked", v)} />
+            </>
           ) : (
             <>
-              {data.channels
-                .slice()
-                .sort((a, b) => b.revenue - a.revenue)
-                .map((c) => {
-                  const pct = channelTotal ? (c.revenue / channelTotal) * 100 : 0;
-                  return (
-                    <div key={c.name} style={styles.channelRow}>
-                      <div style={styles.channelName}>{c.name === topChannel.name ? "★ " : ""}{c.name}</div>
-                      <div style={styles.channelBarTrack}>
-                        <div style={{ ...styles.channelBarFill, width: `${pct}%` }} />
-                      </div>
-                      <div style={styles.channelPct}>{pct.toFixed(0)}%</div>
-                    </div>
-                  );
-                })}
+              <div style={styles.bigNumber}>{pct(reworkRate)}</div>
+              <div style={styles.smallNote}>{data.rework.reworked} of {data.rework.totalTasks} tasks needed rework</div>
+            </>
+          )}
+        </Section>
+
+        <Section eyebrow="06 — Process" title="SOP Adherence">
+          {editing ? (
+            <>
+              <Field label="Processes checked" value={data.sop.checked} onChange={(v) => update("sop", "checked", v)} />
+              <Field label="Following SOP" value={data.sop.following} onChange={(v) => update("sop", "following", v)} />
+            </>
+          ) : (
+            <>
+              <div style={styles.bigNumber}>{pct(sopRate)}</div>
+              <div style={styles.smallNote}>{data.sop.following} of {data.sop.checked} checks followed SOP</div>
+            </>
+          )}
+        </Section>
+
+        <Section eyebrow="07 — Customer Impact" title="Complaint / Escalation Rate">
+          {editing ? (
+            <>
+              <Field label="Total interactions" value={data.complaints.interactions} onChange={(v) => update("complaints", "interactions", v)} />
+              <Field label="Complaints raised" value={data.complaints.complaints} onChange={(v) => update("complaints", "complaints", v)} />
+            </>
+          ) : (
+            <>
+              <div style={styles.bigNumber}>{pct(complaintRate)}</div>
+              <div style={styles.smallNote}>{data.complaints.complaints} complaints of {data.complaints.interactions} interactions</div>
             </>
           )}
         </Section>
@@ -199,7 +237,7 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    maxWidth: 760,
+    maxWidth: 900,
     margin: "0 auto 28px",
     flexWrap: "wrap",
     gap: 12,
@@ -221,7 +259,7 @@ const styles = {
     cursor: "pointer",
   },
   stamp: {
-    maxWidth: 760,
+    maxWidth: 900,
     margin: "0 auto 32px",
     border: "1px solid #D9A441",
     borderRadius: 2,
@@ -242,7 +280,6 @@ const styles = {
   stampLabel: {
     fontFamily: "Georgia, 'Times New Roman', serif",
     fontSize: 15,
-    color: "#D9A441",
     marginTop: 10,
     letterSpacing: 0.5,
   },
@@ -252,12 +289,12 @@ const styles = {
     fontWeight: 600,
     marginTop: 6,
   },
-  stampDelta: { fontSize: 13, marginTop: 8, fontFamily: "ui-monospace, Menlo, monospace" },
+  stampDelta: { fontSize: 12, marginTop: 8, color: "#8B93A1" },
   grid: {
-    maxWidth: 760,
+    maxWidth: 900,
     margin: "0 auto",
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
     gap: 16,
   },
   section: {
@@ -280,21 +317,12 @@ const styles = {
     fontWeight: 400,
   },
   sectionBody: { display: "flex", flexDirection: "column", gap: 10 },
-  sectionFooter: { marginTop: 10, fontSize: 12, color: "#8B93A1" },
   bigNumber: {
     fontFamily: "ui-monospace, Menlo, monospace",
     fontSize: 30,
     fontWeight: 600,
   },
   smallNote: { fontSize: 12, color: "#8B93A1" },
-  statRow: { display: "flex", justifyContent: "space-between", gap: 12 },
-  statValue: { fontFamily: "ui-monospace, Menlo, monospace", fontSize: 20, fontWeight: 600 },
-  statLabel: { fontSize: 11, color: "#8B93A1", marginTop: 4 },
-  channelRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 8 },
-  channelName: { fontSize: 13, width: 100, flexShrink: 0 },
-  channelBarTrack: { flex: 1, height: 6, background: "#262B34", borderRadius: 3, overflow: "hidden" },
-  channelBarFill: { height: "100%", background: "#D9A441" },
-  channelPct: { fontSize: 12, fontFamily: "ui-monospace, Menlo, monospace", width: 32, textAlign: "right" },
   field: { display: "flex", flexDirection: "column", gap: 4 },
   fieldLabel: { fontSize: 12, color: "#8B93A1" },
   fieldInputWrap: {
@@ -305,7 +333,7 @@ const styles = {
     borderRadius: 4,
     padding: "6px 10px",
   },
-  fieldPrefix: { color: "#8B93A1", marginRight: 6, fontSize: 13 },
+  fieldSuffix: { color: "#8B93A1", marginLeft: 6, fontSize: 12 },
   fieldInput: {
     background: "transparent",
     border: "none",
